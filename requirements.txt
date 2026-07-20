@@ -1,0 +1,15 @@
+# Standard house-pattern dependencies
+numpy
+pandas
+huggingface_hub
+pyarrow
+streamlit
+
+# News/text pipeline — genuinely new to this suite (every other engine is
+# pure numpy). torch is CPU-only here; FinBERT (~110M params) is small
+# enough to run comfortably without a GPU, but this is still a much heavier
+# install than any other engine's requirements.txt.
+torch --index-url https://download.pytorch.org/whl/cpu
+transformers
+requests
+beautifulsoup4
