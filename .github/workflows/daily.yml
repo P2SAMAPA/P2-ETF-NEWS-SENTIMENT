@@ -1,0 +1,41 @@
+name: Daily News Sentiment Engine Run
+
+# Two steps, deliberately separate scripts: update_sentiment_cache.py
+# (GDELT + FinBERT ingestion, resumable/incremental) runs first, then
+# trainer.py (scoring only, reads whatever is in the cache).
+#
+# The FIRST run will be slow — backfilling config.BACKFILL_DAYS (default
+# 400) days of GDELT history. If it doesn't finish within the timeout, the
+# cache has already been saved incrementally (every 10 days processed), so
+# the NEXT scheduled run just continues from where it left off — no lost
+# progress, no special "first run" handling needed.
+
+on:
+  schedule:
+    - cron: "30 00 * * 1-6"   # 23:30 UTC Mon-Fri
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300   # heavier than other engines: torch/transformers
+                            # install + FinBERT download + GDELT fetching
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Update sentiment cache (GDELT + FinBERT ingestion)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python update_sentiment_cache.py
+
+      - name: Run trainer (scoring only)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python trainer.py
