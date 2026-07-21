@@ -179,4 +179,4 @@ every ticker; sector keywords apply only to their specific ETF.
 
 **Model: closed-form OLS regression**, deliberately not a neural network —
 a sentiment-return relationship, if one exists, is low-dimensional and
-doesn't justify more model complexity than the data supports:
+doesn't justify more model complexity than the data supports:""")
