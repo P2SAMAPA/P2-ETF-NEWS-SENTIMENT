@@ -155,7 +155,7 @@ needed.
 | Universe | Tickers |
 |---|---|
 | FI_COMMODITIES | TLT, VCIT, LQD, HYG, VNQ, GLD, SLV |
-| EQUITY_SECTORS | SPY, QQQ, XLK, XLF, XLE, XLV, XLI, XLY, XLP, XLU, GDX, XME, IWF, XSD, XBI, IWM, IWD, IWO, XLB, XLRE |
+| EQUITY_SECTORS | SPY, QQQ, XLK, XLF, XLE, XLV, XLI, XLY, XLP, XLU, GDX, XME, IWF, XSD, XBI, IWM, IWD, IWO, XLB, XLRE, SOXX, SMH |
 | COMBINED | All of the above |
 
 **Windows:** `63d · 126d · 252d · 504d`
