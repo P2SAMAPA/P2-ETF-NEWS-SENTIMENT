@@ -18,7 +18,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 300   # heavier than other engines: torch/transformers
+    timeout-minutes: 360   # heavier than other engines: torch/transformers
                             # install + FinBERT download + GDELT fetching
     steps:
       - uses: actions/checkout@v3
