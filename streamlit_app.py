@@ -179,4 +179,147 @@ every ticker; sector keywords apply only to their specific ETF.
 
 **Model: closed-form OLS regression**, deliberately not a neural network —
 a sentiment-return relationship, if one exists, is low-dimensional and
-doesn't justify more model complexity than the data supports:""")
+doesn't justify more model complexity than the data supports:
+forward_return_t = a + bsentiment_t + csentiment_momentum_t + d*news_volume_t
+
+fit via exact linear algebra (`np.linalg.lstsq`), same "exact math, no
+approximation" philosophy as EDMD and GP-Vol elsewhere in this suite.
+
+**Signal:**
+score = 0.50sentiment_signal + 0.25sentiment_persistencesign(sentiment_signal) + 0.25fit_quality
+
+- `sentiment_signal` — OLS-predicted forward return from today's sentiment
+- `sentiment_persistence` — has sentiment been consistently one-directional
+  recently, or is today a one-off blip?
+- `fit_quality` — R² of the regression — **see the caveat banner above
+  before trusting this the way you would in other engines.**
+        """)
+
+    for universe_name, uni_data in universes1.items():
+        top_etfs = uni_data.get("top_etfs", [])
+        if not top_etfs:
+            continue
+        st.markdown(
+            f'<div class="uni-title">{universe_name.replace("_"," ").title()}</div>',
+            unsafe_allow_html=True)
+        cols = st.columns(3)
+        for idx, etf in enumerate(top_etfs):
+            with cols[idx]:
+                st.markdown(f"""
+<div class="etf-card">
+  <div class="etf-ticker">{etf['ticker']}</div>
+  <div class="etf-score">Sentiment score = {etf['sentiment_score']:.4f}</div>
+  <div class="etf-score">best window = {etf.get('best_window','N/A')}d</div>
+  <div class="etf-score">avg sentiment = {etf.get('avg_sentiment_today', float('nan')):.2f}</div>
+  <div class="etf-score">news volume = {etf.get('news_volume_today', float('nan')):.0f}</div>
+</div>
+""", unsafe_allow_html=True)
+
+        with st.expander(f"Full ranking — {universe_name}"):
+            full = uni_data.get("full_scores", {})
+            if full:
+                rows = []
+                for t, info in full.items():
+                    rows.append({
+                        "ETF": t,
+                        "Sentiment Score": info.get("score"),
+                        "Best Window (d)": info.get("best_window", "N/A"),
+                        "Sentiment Signal": info.get("sentiment_signal"),
+                        "Persistence": info.get("sentiment_persistence"),
+                        "Fit Quality": info.get("fit_quality"),
+                        "Avg Sentiment Today": info.get("avg_sentiment_today"),
+                        "News Volume Today": info.get("news_volume_today"),
+                    })
+                df = pd.DataFrame(rows).sort_values("Sentiment Score", ascending=False)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+        st.divider()
+
+    st.caption(
+        f"Run date: {data1.get('run_date','?')} · "
+        "GDELT + FinBERT · Scores are cross-sectional z-scores.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 2
+# ══════════════════════════════════════════════════════════════════════════════
+with tab2:
+    st.header("🔍 Explore Sentiment Rankings by Window")
+
+    if not universes2:
+        st.warning("Window-level detail not found. Re-run trainer.py.")
+        st.stop()
+
+    all_wins = set()
+    for ud in universes2.values():
+        all_wins.update(ud.get("windows", {}).keys())
+    win_options = sorted([int(w) for w in all_wins])
+
+    if not win_options:
+        st.error("No window data available.")
+        st.stop()
+
+    default_idx  = win_options.index(252) if 252 in win_options else 0
+    selected_win = st.selectbox(
+        "Select lookback window",
+        options=win_options,
+        index=default_idx,
+        format_func=lambda w: f"{w}d  (~{round(w/21)} months)",
+    )
+    win_key = str(selected_win)
+
+    with st.expander("Window guidance", expanded=False):
+        st.markdown("""
+- **63d/126d** — short history; the sentiment cache itself may not even
+  cover this much yet on early runs
+- **252d** — 1-year window; recommended primary window once the cache has
+  built up enough history
+- **504d** — 2-year window; more training data for the regression, but
+  news relevance/vocabulary can drift over a longer period
+        """)
+
+    st.markdown(f"### Sentiment Rankings at **{selected_win}d** window")
+
+    for universe_name in ["FI_COMMODITIES", "EQUITY_SECTORS", "COMBINED"]:
+        label = {
+            "FI_COMMODITIES": "🏦 FI & Commodities",
+            "EQUITY_SECTORS": "📈 Equity Sectors",
+            "COMBINED":       "🌐 Combined",
+        }.get(universe_name, universe_name)
+
+        st.markdown(f'<div class="uni-title">{label}</div>', unsafe_allow_html=True)
+
+        uni_data = universes2.get(universe_name, {})
+        win_data = uni_data.get("windows", {}).get(win_key)
+
+        if not win_data:
+            st.info(f"No data for {universe_name} at {selected_win}d.")
+            st.divider()
+            continue
+
+        cols = st.columns(3)
+        for idx, etf in enumerate(win_data.get("top_etfs", [])):
+            with cols[idx]:
+                st.markdown(f"""
+<div class="win-card">
+  <div class="etf-ticker">{etf['ticker']}</div>
+  <div class="etf-score">Sentiment score = {etf['sentiment_score']:.4f}</div>
+  <div class="etf-score">window = {selected_win}d</div>
+  <div class="etf-score">persistence = {etf.get('sentiment_persistence', float('nan')):.2f}</div>
+  <div class="etf-score">fit quality = {etf.get('fit_quality', float('nan')):.2f}</div>
+</div>
+""", unsafe_allow_html=True)
+
+        with st.expander(f"Full ranking — {label} @ {selected_win}d"):
+            rows = win_data.get("full_ranking", [])
+            if rows:
+                df = pd.DataFrame(
+                    rows,
+                    columns=["ETF", "Sentiment Score", "Sentiment Signal",
+                             "Persistence", "Fit Quality"],
+                )
+                df.insert(0, "Rank", range(1, len(df) + 1))
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        st.divider()
+
+    st.caption(f"Window: {selected_win}d · Run date: {data2.get('run_date','?')}")
