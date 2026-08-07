@@ -182,11 +182,14 @@ a sentiment-return relationship, if one exists, is low-dimensional and
 doesn't justify more model complexity than the data supports:
 forward_return_t = a + bsentiment_t + csentiment_momentum_t + d*news_volume_t
 
+
 fit via exact linear algebra (`np.linalg.lstsq`), same "exact math, no
 approximation" philosophy as EDMD and GP-Vol elsewhere in this suite.
 
 **Signal:**
+
 score = 0.50sentiment_signal + 0.25sentiment_persistencesign(sentiment_signal) + 0.25fit_quality
+
 
 - `sentiment_signal` — OLS-predicted forward return from today's sentiment
 - `sentiment_persistence` — has sentiment been consistently one-directional
@@ -212,6 +215,7 @@ score = 0.50sentiment_signal + 0.25sentiment_persistencesign(sentiment_signal) +
   <div class="etf-score">best window = {etf.get('best_window','N/A')}d</div>
   <div class="etf-score">avg sentiment = {etf.get('avg_sentiment_today', float('nan')):.2f}</div>
   <div class="etf-score">news volume = {etf.get('news_volume_today', float('nan')):.0f}</div>
+  <div class="etf-score">days since news = {etf.get('days_since_last_news', float('nan')):.0f}</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -229,6 +233,7 @@ score = 0.50sentiment_signal + 0.25sentiment_persistencesign(sentiment_signal) +
                         "Fit Quality": info.get("fit_quality"),
                         "Avg Sentiment Today": info.get("avg_sentiment_today"),
                         "News Volume Today": info.get("news_volume_today"),
+                        "Days Since Last News": info.get("days_since_last_news"),
                     })
                 df = pd.DataFrame(rows).sort_values("Sentiment Score", ascending=False)
                 st.dataframe(df, use_container_width=True, hide_index=True)
