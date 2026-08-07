@@ -113,6 +113,7 @@ def main():
                     "fit_quality":             float(row["fit_quality"]),
                     "avg_sentiment_today":     float(row["avg_sentiment_today"]),
                     "news_volume_today":       float(row["news_volume_today"]),
+                    "days_since_last_news":    float(row["days_since_last_news"]),
                 }
 
             sorted_scores = sorted(score_records.items(), key=lambda x: x[1]["score"], reverse=True)
@@ -140,6 +141,7 @@ def main():
                 "fit_quality": rec["fit_quality"],
                 "avg_sentiment_today": rec["avg_sentiment_today"],
                 "news_volume_today": rec["news_volume_today"],
+                "days_since_last_news": rec["days_since_last_news"],
             }
             for t, rec in sorted_etfs[:config.TOP_N]
         ]
@@ -151,6 +153,7 @@ def main():
                 "fit_quality": rec["fit_quality"],
                 "avg_sentiment_today": rec["avg_sentiment_today"],
                 "news_volume_today": rec["news_volume_today"],
+                "days_since_last_news": rec["days_since_last_news"],
             }
             for t, rec in sorted_etfs
         }
