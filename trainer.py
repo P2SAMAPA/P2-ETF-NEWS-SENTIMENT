@@ -48,9 +48,10 @@ def main():
     if not config.HF_TOKEN:
         print("HF_TOKEN not set"); return
 
-    df               = data_manager.load_master_data()
-    sentiment_cache  = load_sentiment_cache()
-    today            = datetime.now().strftime("%Y-%m-%d")
+    df = data_manager.load_master_data()
+    sentiment_cache = load_sentiment_cache()
+
+    today = datetime.now().strftime("%Y-%m-%d")
 
     if sentiment_cache.empty:
         print("Sentiment cache is empty — nothing to score. "
@@ -66,7 +67,7 @@ def main():
     for universe_name, tickers in config.UNIVERSES.items():
         print(f"\n=== Universe: {universe_name} (News Sentiment Engine) ===")
 
-        prices            = data_manager.prepare_prices(df, tickers)
+        prices = data_manager.prepare_prices(df, tickers)
         available_tickers = [t for t in tickers if t in prices.columns]
 
         if not available_tickers or prices.empty:
@@ -75,7 +76,7 @@ def main():
             all_windows[universe_name] = {"windows": {}}
             continue
 
-        best_per_etf   = {}
+        best_per_etf = {}
         window_results = {}
 
         for win in config.WINDOWS:
@@ -88,10 +89,10 @@ def main():
 
             try:
                 scores_df = compute_news_sentiment_scores(
-                    prices          = prices,
-                    sentiment_long  = sentiment_cache,
-                    tickers         = available_tickers,
-                    window          = win,
+                    prices=prices,
+                    sentiment_long=sentiment_cache,
+                    tickers=available_tickers,
+                    window=win,
                 )
             except Exception as e:
                 print(f"  Failed: {e}")
@@ -107,13 +108,13 @@ def main():
                 if np.isnan(row["score"]):
                     continue
                 score_records[t] = {
-                    "score":                   float(row["score"]),
-                    "sentiment_signal":        float(row["sentiment_signal"]),
-                    "sentiment_persistence":   float(row["sentiment_persistence"]),
-                    "fit_quality":             float(row["fit_quality"]),
-                    "avg_sentiment_today":     float(row["avg_sentiment_today"]),
-                    "news_volume_today":       float(row["news_volume_today"]),
-                    "days_since_last_news":    float(row["days_since_last_news"]),
+                    "score": float(row["score"]),
+                    "sentiment_signal": float(row["sentiment_signal"]),
+                    "sentiment_persistence": float(row["sentiment_persistence"]),
+                    "fit_quality": float(row["fit_quality"]),
+                    "avg_sentiment_today": float(row["avg_sentiment_today"]),
+                    "news_volume_today": float(row["news_volume_today"]),
+                    "days_since_last_news": float(row["days_since_last_news"]),
                 }
 
             sorted_scores = sorted(score_records.items(), key=lambda x: x[1]["score"], reverse=True)
@@ -131,7 +132,8 @@ def main():
             continue
 
         sorted_etfs = sorted(best_per_etf.items(), key=lambda x: x[1]["score"], reverse=True)
-        top_etfs    = [
+
+        top_etfs = [
             {
                 "ticker": t,
                 "sentiment_score": rec["score"],
@@ -145,6 +147,7 @@ def main():
             }
             for t, rec in sorted_etfs[:config.TOP_N]
         ]
+
         full_scores = {
             t: {
                 "score": rec["score"], "best_window": int(rec["window"]),
@@ -157,9 +160,11 @@ def main():
             }
             for t, rec in sorted_etfs
         }
+
         all_results[universe_name] = {
             "top_etfs": top_etfs, "full_scores": full_scores, "run_date": today
         }
+
         print(f"\n  Final top {config.TOP_N}: {[e['ticker'] for e in top_etfs]}")
 
         windows_tab2 = {}
