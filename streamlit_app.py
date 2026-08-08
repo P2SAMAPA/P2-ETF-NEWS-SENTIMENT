@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 from huggingface_hub import HfFileSystem
+
 import config
 from us_calendar import next_trading_day
 
@@ -10,17 +11,20 @@ st.set_page_config(page_title="News Sentiment Engine", layout="wide")
 st.markdown("""
 <style>
 .main-header { font-size:2.4rem; font-weight:700; color:#2c1810; margin-bottom:0.3rem; }
-.sub-header  { font-size:1.1rem; color:#555; margin-bottom:1.5rem; }
-.uni-title   { font-size:1.4rem; font-weight:600; margin-top:1rem; margin-bottom:0.8rem;
-               padding-left:0.5rem; border-left:5px solid #a0522d; }
-.etf-card    { background:linear-gradient(135deg,#2c1810 0%,#a0522d 100%); color:white;
-               border-radius:14px; padding:1rem; margin:0.4rem; text-align:center;
-               box-shadow:0 4px 6px rgba(0,0,0,0.2); }
-.win-card    { background:linear-gradient(135deg,#2c1810 0%,#5c3a26 100%); color:white;
-               border-radius:14px; padding:1rem; margin:0.4rem; text-align:center;
-               box-shadow:0 4px 6px rgba(0,0,0,0.2); }
-.etf-ticker  { font-size:1.3rem; font-weight:bold; }
-.etf-score   { font-size:0.88rem; margin-top:0.25rem; opacity:0.9; }
+.sub-header { font-size:1.1rem; color:#555; margin-bottom:1.5rem; }
+.uni-title { font-size:1.4rem; font-weight:600; margin-top:1rem; margin-bottom:0.8rem;
+             padding-left:0.5rem; border-left:5px solid #a0522d; }
+.etf-card { background:linear-gradient(135deg,#2c1810 0%,#a0522d 100%); color:white;
+            border-radius:14px; padding:1rem; margin:0.4rem; text-align:center;
+            box-shadow:0 4px 6px rgba(0,0,0,0.2); }
+.win-card { background:linear-gradient(135deg,#2c1810 0%,#5c3a26 100%); color:white;
+            border-radius:14px; padding:1rem; margin:0.4rem; text-align:center;
+            box-shadow:0 4px 6px rgba(0,0,0,0.2); }
+.ablation-card { background:linear-gradient(135deg,#1b2a2c 0%,#3d6b6f 100%); color:white;
+            border-radius:14px; padding:1rem; margin:0.4rem; text-align:center;
+            box-shadow:0 4px 6px rgba(0,0,0,0.2); }
+.etf-ticker { font-size:1.3rem; font-weight:bold; }
+.etf-score { font-size:0.88rem; margin-top:0.25rem; opacity:0.9; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -37,8 +41,9 @@ st.warning(
     "MULTI-DAY-FORWARD returns is genuinely mixed and often weak. Treat `fit_quality` "
     "here with more skepticism than the equivalent diagnostic in other engines in this "
     "suite — this is exactly the kind of claim worth validating with an out-of-sample "
-    "ablation (as was built for the Temporal Neighbourhood Network engine) rather than "
-    "trusting in-sample R² alone."
+    "ablation (as was built for the Temporal Neighbourhood Network engine, and now for "
+    "this engine too — see the 🧪 Out-of-Sample Ablation tab) rather than trusting "
+    "in-sample R² alone."
 )
 
 st.sidebar.markdown("## News Sentiment Engine")
@@ -52,7 +57,7 @@ st.sidebar.markdown(
     f"Persistence {config.WEIGHT_PERSISTENCE:.0%} | "
     f"Fit {config.WEIGHT_FIT:.0%}")
 
-HF_TOKEN    = config.HF_TOKEN
+HF_TOKEN = config.HF_TOKEN
 OUTPUT_REPO = config.OUTPUT_REPO
 
 
@@ -70,7 +75,7 @@ def list_repo_files():
 
 def find_latest(files, prefix):
     matches = sorted([f for f in files if f.endswith(".json") and prefix in f],
-                     reverse=True)
+                      reverse=True)
     return matches[0] if matches else None
 
 
@@ -100,7 +105,7 @@ def load_cache_stats():
 files, list_error = list_repo_files()
 
 with st.expander("🔧 Debug: what the dashboard sees on HuggingFace", expanded=bool(list_error)):
-    st.markdown(f"**Repo:** `{OUTPUT_REPO}`  ·  **Token set:** {'yes' if bool(HF_TOKEN) else 'no'}")
+    st.markdown(f"**Repo:** `{OUTPUT_REPO}` · **Token set:** {'yes' if bool(HF_TOKEN) else 'no'}")
     if list_error:
         st.error(f"Could not list repo files: {list_error}")
     else:
@@ -125,6 +130,7 @@ with st.expander("📊 Sentiment cache status", expanded=False):
 
 tab1_path = find_latest(files, "news_sentiment_engine_2")
 tab2_path = find_latest(files, "news_sentiment_engine_windows_")
+tab3_path = find_latest(files, "news_sentiment_ablation_")
 
 if not tab1_path:
     if list_error:
@@ -143,14 +149,20 @@ if "error" in data1:
     st.error(f"Error loading data: {data1['error']}")
     st.stop()
 
-data2      = load_json(tab2_path) if tab2_path else None
+data2 = load_json(tab2_path) if tab2_path else None
+data3 = load_json(tab3_path) if tab3_path else None
+
 universes1 = data1["universes"]
 universes2 = data2["universes"] if data2 and "error" not in data2 else None
+universes3 = data3["universes"] if data3 and "error" not in data3 else None
 
 st.sidebar.markdown(f"**Run date:** `{data1.get('run_date','?')}`")
 
-tab1, tab2 = st.tabs(["🏆 Best Window per ETF", "🔍 Explore by Window"])
-
+tab1, tab2, tab3 = st.tabs([
+    "🏆 Best Window per ETF",
+    "🔍 Explore by Window",
+    "🧪 Out-of-Sample Ablation",
+])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 1
@@ -180,44 +192,46 @@ every ticker; sector keywords apply only to their specific ETF.
 **Model: closed-form OLS regression**, deliberately not a neural network —
 a sentiment-return relationship, if one exists, is low-dimensional and
 doesn't justify more model complexity than the data supports:
-forward_return_t = a + bsentiment_t + csentiment_momentum_t + d*news_volume_t
 
+    forward_return_t = a + b*sentiment_t + c*sentiment_momentum_t + d*news_volume_t
 
 fit via exact linear algebra (`np.linalg.lstsq`), same "exact math, no
 approximation" philosophy as EDMD and GP-Vol elsewhere in this suite.
 
 **Signal:**
 
-score = 0.50sentiment_signal + 0.25sentiment_persistencesign(sentiment_signal) + 0.25fit_quality
-
+    score = 0.50*sentiment_signal + 0.25*sentiment_persistence*sign(sentiment_signal) + 0.25*fit_quality
 
 - `sentiment_signal` — OLS-predicted forward return from today's sentiment
 - `sentiment_persistence` — has sentiment been consistently one-directional
   recently, or is today a one-off blip?
 - `fit_quality` — R² of the regression — **see the caveat banner above
-  before trusting this the way you would in other engines.**
+  before trusting this the way you would in other engines. Check the
+  🧪 Out-of-Sample Ablation tab for a real generalization check.**
         """)
 
     for universe_name, uni_data in universes1.items():
         top_etfs = uni_data.get("top_etfs", [])
         if not top_etfs:
             continue
+
         st.markdown(
             f'<div class="uni-title">{universe_name.replace("_"," ").title()}</div>',
             unsafe_allow_html=True)
+
         cols = st.columns(3)
         for idx, etf in enumerate(top_etfs):
             with cols[idx]:
                 st.markdown(f"""
-<div class="etf-card">
-  <div class="etf-ticker">{etf['ticker']}</div>
-  <div class="etf-score">Sentiment score = {etf['sentiment_score']:.4f}</div>
-  <div class="etf-score">best window = {etf.get('best_window','N/A')}d</div>
-  <div class="etf-score">avg sentiment = {etf.get('avg_sentiment_today', float('nan')):.2f}</div>
-  <div class="etf-score">news volume = {etf.get('news_volume_today', float('nan')):.0f}</div>
-  <div class="etf-score">days since news = {etf.get('days_since_last_news', float('nan')):.0f}</div>
-</div>
-""", unsafe_allow_html=True)
+                <div class="etf-card">
+                    <div class="etf-ticker">{etf['ticker']}</div>
+                    <div class="etf-score">Sentiment score = {etf['sentiment_score']:.4f}</div>
+                    <div class="etf-score">best window = {etf.get('best_window','N/A')}d</div>
+                    <div class="etf-score">avg sentiment = {etf.get('avg_sentiment_today', float('nan')):.2f}</div>
+                    <div class="etf-score">news volume = {etf.get('news_volume_today', float('nan')):.0f}</div>
+                    <div class="etf-score">days since news = {etf.get('days_since_last_news', float('nan')):.0f}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
         with st.expander(f"Full ranking — {universe_name}"):
             full = uni_data.get("full_scores", {})
@@ -237,12 +251,11 @@ score = 0.50sentiment_signal + 0.25sentiment_persistencesign(sentiment_signal) +
                     })
                 df = pd.DataFrame(rows).sort_values("Sentiment Score", ascending=False)
                 st.dataframe(df, use_container_width=True, hide_index=True)
-        st.divider()
 
+    st.divider()
     st.caption(
         f"Run date: {data1.get('run_date','?')} · "
         "GDELT + FinBERT · Scores are cross-sectional z-scores.")
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 2
@@ -263,12 +276,12 @@ with tab2:
         st.error("No window data available.")
         st.stop()
 
-    default_idx  = win_options.index(252) if 252 in win_options else 0
+    default_idx = win_options.index(252) if 252 in win_options else 0
     selected_win = st.selectbox(
         "Select lookback window",
         options=win_options,
         index=default_idx,
-        format_func=lambda w: f"{w}d  (~{round(w/21)} months)",
+        format_func=lambda w: f"{w}d (~{round(w/21)} months)",
     )
     win_key = str(selected_win)
 
@@ -276,8 +289,9 @@ with tab2:
         st.markdown("""
 - **63d/126d** — short history; the sentiment cache itself may not even
   cover this much yet on early runs
-- **252d** — 1-year window; recommended primary window once the cache has
-  built up enough history
+- **252d** — 1-year window; commonly used as a default starting point,
+  but check the 🧪 Out-of-Sample Ablation tab before trusting any single
+  window's in-sample fit
 - **504d** — 2-year window; more training data for the regression, but
   news relevance/vocabulary can drift over a longer period
         """)
@@ -288,7 +302,7 @@ with tab2:
         label = {
             "FI_COMMODITIES": "🏦 FI & Commodities",
             "EQUITY_SECTORS": "📈 Equity Sectors",
-            "COMBINED":       "🌐 Combined",
+            "COMBINED": "🌐 Combined",
         }.get(universe_name, universe_name)
 
         st.markdown(f'<div class="uni-title">{label}</div>', unsafe_allow_html=True)
@@ -305,14 +319,14 @@ with tab2:
         for idx, etf in enumerate(win_data.get("top_etfs", [])):
             with cols[idx]:
                 st.markdown(f"""
-<div class="win-card">
-  <div class="etf-ticker">{etf['ticker']}</div>
-  <div class="etf-score">Sentiment score = {etf['sentiment_score']:.4f}</div>
-  <div class="etf-score">window = {selected_win}d</div>
-  <div class="etf-score">persistence = {etf.get('sentiment_persistence', float('nan')):.2f}</div>
-  <div class="etf-score">fit quality = {etf.get('fit_quality', float('nan')):.2f}</div>
-</div>
-""", unsafe_allow_html=True)
+                <div class="win-card">
+                    <div class="etf-ticker">{etf['ticker']}</div>
+                    <div class="etf-score">Sentiment score = {etf['sentiment_score']:.4f}</div>
+                    <div class="etf-score">window = {selected_win}d</div>
+                    <div class="etf-score">persistence = {etf.get('sentiment_persistence', float('nan')):.2f}</div>
+                    <div class="etf-score">fit quality = {etf.get('fit_quality', float('nan')):.2f}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
         with st.expander(f"Full ranking — {label} @ {selected_win}d"):
             rows = win_data.get("full_ranking", [])
@@ -328,3 +342,141 @@ with tab2:
         st.divider()
 
     st.caption(f"Window: {selected_win}d · Run date: {data2.get('run_date','?')}")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 3 — Out-of-Sample Ablation
+# ══════════════════════════════════════════════════════════════════════════════
+with tab3:
+    st.header("🧪 Out-of-Sample Ablation")
+
+    st.markdown("""
+Every other tab on this dashboard ranks ETFs using **in-sample** `fit_quality`
+(R² of the OLS regression on the same data it was fit on) — which, per the
+caveat banner at the top of this page, is not by itself evidence the
+sentiment-return relationship generalizes. This tab answers that question
+directly: for each ticker and window, the regression is fit on the
+**first ~70%** of the window's history and scored against the **untouched
+last ~30%** — a genuine chronological train/test split, with no
+information leaking from test back into training (including the news
+volume normalization stats, which are computed from TRAIN only).
+    """)
+
+    with st.expander("How to read this tab", expanded=True):
+        st.markdown("""
+- **OOS R²** — out-of-sample R² on the held-out test period, relative to
+  that period's own mean return. **Can be negative** — that means the
+  model does *worse* than just guessing the average return, which is a
+  real and informative possibility, not a bug.
+- **OOS Correlation** — Pearson correlation between predicted and realized
+  forward returns on the test set.
+- **OOS Hit Rate** — fraction of test-period predictions whose *sign*
+  matched the realized return's sign (0.50 = coin flip).
+- **In-Sample Fit** — the TRAIN-only R², shown for direct comparison
+  against the live engine's `fit_quality` number in the other tabs. A
+  large gap between this and OOS R² is the signature of overfitting.
+
+⚠️ **A caveat about the caveat**: the forward-return target is a rolling
+21-trading-day window sampled once per day, so consecutive test-set
+observations overlap and are strongly autocorrelated — a multi-week trend
+in the test period can inflate **OOS Hit Rate** even when the underlying
+signal is pure noise. Weight **OOS R²** and **OOS Correlation** more
+heavily than hit rate for that reason.
+
+**Bottom line for "which window should I use?"**: prefer the window with
+the best genuinely out-of-sample R²/correlation for a given ticker — not
+the window with the best in-sample fit_quality, and not a single
+universe-wide default.
+        """)
+
+    if not universes3:
+        st.info(
+            "No ablation results found yet. Run `ablation_news_sentiment.py` "
+            "(alongside `trainer.py`) to populate this tab."
+        )
+    else:
+        for universe_name in ["FI_COMMODITIES", "EQUITY_SECTORS", "COMBINED"]:
+            label = {
+                "FI_COMMODITIES": "🏦 FI & Commodities",
+                "EQUITY_SECTORS": "📈 Equity Sectors",
+                "COMBINED": "🌐 Combined",
+            }.get(universe_name, universe_name)
+
+            uni_data = universes3.get(universe_name, {})
+            windows_data = uni_data.get("windows", {})
+            best_oos = uni_data.get("best_oos_window", {})
+
+            if not windows_data:
+                continue
+
+            st.markdown(f'<div class="uni-title">{label}</div>', unsafe_allow_html=True)
+
+            if best_oos:
+                st.markdown("**Best window per ETF, by true out-of-sample R² (not in-sample fit):**")
+                best_rows = []
+                for ticker, rec in sorted(best_oos.items(), key=lambda x: x[1]["oos_r2"], reverse=True):
+                    best_rows.append({
+                        "ETF": ticker,
+                        "Best OOS Window (d)": rec["window"],
+                        "OOS R²": rec["oos_r2"],
+                        "OOS Correlation": rec["oos_correlation"],
+                        "OOS Hit Rate": rec["oos_hit_rate"],
+                        "In-Sample Fit (same window)": rec["in_sample_fit_quality"],
+                    })
+                best_df = pd.DataFrame(best_rows)
+                st.dataframe(
+                    best_df.style.format({
+                        "OOS R²": "{:.3f}",
+                        "OOS Correlation": "{:.3f}",
+                        "OOS Hit Rate": "{:.2f}",
+                        "In-Sample Fit (same window)": "{:.3f}",
+                    }),
+                    use_container_width=True, hide_index=True,
+                )
+
+                n_positive = sum(1 for r in best_oos.values() if r["oos_r2"] > 0)
+                st.caption(
+                    f"{n_positive} of {len(best_oos)} ETFs in this universe have a "
+                    f"positive best-case out-of-sample R² — i.e. genuinely beat "
+                    f"guessing the mean on held-out data at their best window."
+                )
+
+            with st.expander(f"Full ablation detail by window — {label}"):
+                win_options = sorted([int(w) for w in windows_data.keys()])
+                sel = st.selectbox(
+                    "Window", options=win_options,
+                    format_func=lambda w: f"{w}d",
+                    key=f"ablation_win_{universe_name}",
+                )
+                detail = windows_data.get(str(sel), {})
+                if detail:
+                    rows = []
+                    for ticker, rec in detail.items():
+                        rows.append({
+                            "ETF": ticker,
+                            "In-Sample Fit": rec["in_sample_fit_quality"],
+                            "OOS R²": rec["oos_r2"],
+                            "OOS Correlation": rec["oos_correlation"],
+                            "OOS Hit Rate": rec["oos_hit_rate"],
+                            "N Train": rec["n_train"],
+                            "N Test": rec["n_test"],
+                        })
+                    df = pd.DataFrame(rows).sort_values("OOS R²", ascending=False)
+                    st.dataframe(
+                        df.style.format({
+                            "In-Sample Fit": "{:.3f}",
+                            "OOS R²": "{:.3f}",
+                            "OOS Correlation": "{:.3f}",
+                            "OOS Hit Rate": "{:.2f}",
+                        }),
+                        use_container_width=True, hide_index=True,
+                    )
+                else:
+                    st.info(f"No tickers had enough data for {sel}d in this universe.")
+
+            st.divider()
+
+        st.caption(
+            f"Run date: {data3.get('run_date','?')} · "
+            "Chronological 70/30 train/test split per ticker per window · "
+            "Volume normalization computed from TRAIN only to avoid leakage."
+        )
