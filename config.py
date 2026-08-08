@@ -132,3 +132,14 @@ WEIGHT_PERSISTENCE   = 0.25
 WEIGHT_FIT            = 0.25
 
 TOP_N = 3
+
+SENTIMENT_MOM_LOOKBACK = 5   # days used to measure sentiment persistence/momentum
+
+# sentiment_persistence is measured over the last SENTIMENT_MOM_LOOKBACK
+# GENUINE (non-forward-filled) news readings, not calendar days — sparse
+# news gets forward-filled across no-news days, so measuring persistence
+# over calendar days would trivially count repeated stale values as
+# "persistent" agreement with themselves. If fewer than this many genuine
+# readings exist, persistence is reported as 0.0 (insufficient evidence)
+# rather than a misleadingly confident number.
+MIN_REAL_OBSERVATIONS_FOR_PERSISTENCE = 2
