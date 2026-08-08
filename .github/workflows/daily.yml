@@ -39,3 +39,8 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: python trainer.py
+        
+      - name: Run ablation
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python ablation_news_sentiment.py
