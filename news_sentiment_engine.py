@@ -1,7 +1,6 @@
 """
 news_sentiment_engine.py — News Sentiment Engine
 ========================================================
-
 Theory
 ------
 Given a daily sentiment time series per ticker (built from GDELT + FinBERT
@@ -28,11 +27,11 @@ rather than assumed from in-sample R^2 alone.
 
     score = 0.50*sentiment_signal + 0.25*sentiment_persistence*sign(sentiment_signal) + 0.25*fit_quality
 
-| Component              | Meaning                                                          |
-|--------------------------|----------------------------------------------------------------------|
-| sentiment_signal         | OLS-predicted forward return from today's sentiment features       |
-| sentiment_persistence    | Has sentiment been consistently one-directional recently, or is today a one-off blip? |
-| fit_quality              | R^2 of the OLS regression on its own training data                 |
+| Component              | Meaning                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------|
+| sentiment_signal        | OLS-predicted forward return from today's sentiment features                         |
+| sentiment_persistence   | Has sentiment been consistently one-directional recently, or is today a one-off blip? |
+| fit_quality             | R^2 of the OLS regression on its own training data                                   |
 """
 
 import numpy as np
@@ -45,6 +44,7 @@ import config
 def build_sentiment_features(sentiment_long: pd.DataFrame, tickers: List[str]):
     """
     sentiment_long: columns [date, ticker, avg_sentiment, article_count].
+
     Returns (sent_wide, count_wide): date-indexed DataFrames, one column
     per ticker, forward-filled over gaps (days with zero matched articles).
     """
@@ -56,7 +56,8 @@ def build_sentiment_features(sentiment_long: pd.DataFrame, tickers: List[str]):
 
     sent_wide = sent_wide.reindex(columns=tickers)
     count_wide = count_wide.reindex(columns=tickers).fillna(0.0)
-    sent_wide = sent_wide.ffill()   # carry sentiment forward over no-news days
+
+    sent_wide = sent_wide.ffill()  # carry sentiment forward over no-news days
 
     return sent_wide, count_wide
 
@@ -73,10 +74,10 @@ def fit_ols(X: np.ndarray, y: np.ndarray):
 
 
 def compute_news_sentiment_scores(
-    prices:          pd.DataFrame,
-    sentiment_long:  pd.DataFrame,
-    tickers:         List[str],
-    window:          int,
+    prices: pd.DataFrame,
+    sentiment_long: pd.DataFrame,
+    tickers: List[str],
+    window: int,
 ) -> pd.DataFrame:
     """
     Fit an OLS sentiment-return regression per ETF and extract a
@@ -84,7 +85,8 @@ def compute_news_sentiment_scores(
     (cross-sectional z-scored on the composite).
     """
     cols = ["score", "sentiment_signal", "sentiment_persistence", "fit_quality",
-            "avg_sentiment_today", "news_volume_today"]
+            "avg_sentiment_today", "news_volume_today", "days_since_last_news"]
+
     avail = [t for t in tickers if t in prices.columns]
     if not avail or sentiment_long.empty:
         return pd.DataFrame(columns=cols)
@@ -112,12 +114,12 @@ def compute_news_sentiment_scores(
 
         log_ret = np.log(ps_a / ps_a.shift(1)).values
         T = len(log_ret)
-
         n = T - H - mom_lb
         if n < 20:
             continue
 
         rows_sent, rows_mom, rows_vol, targets = [], [], [], []
+
         for t in range(mom_lb, T - H):
             if np.isnan(log_ret[t]):
                 continue
@@ -137,18 +139,19 @@ def compute_news_sentiment_scores(
             continue
 
         rows_sent = np.array(rows_sent)
-        rows_mom  = np.array(rows_mom)
-        rows_vol  = np.array(rows_vol)
-        targets   = np.array(targets)
+        rows_mom = np.array(rows_mom)
+        rows_vol = np.array(rows_vol)
+        targets = np.array(targets)
 
         vol_mu, vol_sd = rows_vol.mean(), rows_vol.std() + 1e-8
         vol_norm = (rows_vol - vol_mu) / vol_sd
 
         X = np.column_stack([np.ones(len(targets)), rows_sent, rows_mom, vol_norm])
+
         try:
             beta, fit_quality = fit_ols(X, targets)
         except Exception as e:
-            print(f"    Failed {ticker}: {e}")
+            print(f"  Failed {ticker}: {e}")
             continue
 
         s_today_now = sent_a[-1]
@@ -166,11 +169,19 @@ def compute_news_sentiment_scores(
         else:
             sentiment_persistence = float(np.mean(np.sign(recent_sent) == sign_today))
 
+        # Days since the most recent day with any matched articles at all
+        # (uses the raw, non-forward-filled article counts in count_a).
+        nonzero_idx = np.nonzero(count_a > 0)[0]
+        if len(nonzero_idx) == 0:
+            days_since_last_news = float(len(count_a))
+        else:
+            days_since_last_news = float((len(count_a) - 1) - nonzero_idx[-1])
+
         sign = np.sign(sentiment_signal) if sentiment_signal != 0 else 1.0
         composite = (
-            config.WEIGHT_SENTIMENT   * sentiment_signal
+            config.WEIGHT_SENTIMENT * sentiment_signal
             + config.WEIGHT_PERSISTENCE * sentiment_persistence * sign
-            + config.WEIGHT_FIT          * fit_quality
+            + config.WEIGHT_FIT * fit_quality
         )
 
         raw_scores[ticker] = {
@@ -180,9 +191,11 @@ def compute_news_sentiment_scores(
             "fit_quality": fit_quality,
             "avg_sentiment_today": float(s_today_now),
             "news_volume_today": float(count_a[-1]),
+            "days_since_last_news": days_since_last_news,
         }
-        print(f"    {ticker}: sentiment_signal={sentiment_signal:.5f}  "
-              f"persistence={sentiment_persistence:.2f}  fit={fit_quality:.3f}")
+
+        print(f"    {ticker}: sentiment_signal={sentiment_signal:.5f} "
+              f"persistence={sentiment_persistence:.2f} fit={fit_quality:.3f}")
 
     if not raw_scores:
         return pd.DataFrame(columns=cols)
@@ -193,4 +206,5 @@ def compute_news_sentiment_scores(
         df["score"] = 0.0
     else:
         df["score"] = (df["composite"] - mu_s) / std_s
+
     return df[cols]
