@@ -12,13 +12,13 @@ SENTIMENT_CACHE_FILENAME = "sentiment_cache.parquet"
 UNIVERSES = {
     "FI_COMMODITIES": ["TLT", "VCIT", "LQD", "HYG", "VNQ", "GLD", "SLV"],
     "EQUITY_SECTORS": [
-        "SPY", "QQQ", "XLK", "XLF", "XLE", "XLV", "XLI", "XLY",
+        "SPY", "QQQ", "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "VUG", "VTV", "SPYG", "QUAL", "IWR", "VO", "VB", "VIG", "VEA", "VGT", "VDE", "XLC", "IBB",
         "XLP", "XLU", "GDX", "XME", "IWF", "XSD", "XBI", "SMH", "SOXX", "URA",
         "IWM", "IWD", "IWO", "XLB", "XLRE",
     ],
     "COMBINED": [
         "TLT", "VCIT", "LQD", "HYG", "VNQ", "GLD", "SLV",
-        "SPY", "QQQ", "XLK", "XLF", "XLE", "XLV", "XLI", "XLY",
+        "SPY", "QQQ", "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "VUG", "VTV", "SPYG", "QUAL", "IWR", "VO", "VB", "VIG", "VEA", "VGT", "VDE", "XLC", "IBB",
         "XLP", "XLU", "GDX", "XME", "IWF", "XSD", "XBI", "SMH", "SOXX", "URA",
         "IWM", "IWD", "IWO", "XLB", "XLRE",
     ],
